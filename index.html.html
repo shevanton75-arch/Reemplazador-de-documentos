@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reemplazador de Documentos Municipales</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{--navy:#0B1F3A;--navy-2:#112748;--sky:#7EC8E3;--sky-light:#B3DFF0;--white:#F4F9FC;--mid:#5B7A99;--border:rgba(126,200,227,0.22);--border-lt:rgba(126,200,227,0.10);--radius:3px;--radius-lg:8px;}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--white);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 0 80px;}
+  header{width:100%;border-bottom:1px solid var(--border);padding:32px 0 26px;text-align:center;background:linear-gradient(180deg,#060F1E 0%,var(--navy) 100%);position:relative;overflow:hidden;}
+  header::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:700px;height:1px;background:linear-gradient(90deg,transparent,var(--sky),transparent);}
+  .header-ornament{font-family:'Cormorant Garamond',serif;font-size:10px;letter-spacing:.38em;color:var(--sky);text-transform:uppercase;margin-bottom:10px;opacity:.85;}
+  header h1{font-family:'Cormorant Garamond',serif;font-size:clamp(24px,4vw,38px);font-weight:300;letter-spacing:.04em;color:var(--white);line-height:1.15;}
+  header h1 em{font-style:italic;color:var(--sky-light);}
+  .header-sub{font-size:11px;color:var(--mid);letter-spacing:.07em;margin-top:8px;font-weight:300;}
+  .version-badge{display:inline-block;margin-top:10px;padding:3px 10px;border:1px solid var(--border);border-radius:20px;font-size:10px;color:var(--sky);letter-spacing:.1em;}
+  .tabs{display:flex;border-bottom:1px solid var(--border-lt);margin-bottom:32px;}
+  .tab{padding:12px 20px;font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--mid);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;font-weight:500;white-space:nowrap;}
+  .tab:hover{color:var(--sky-light);}
+  .tab.active{color:var(--sky);border-bottom-color:var(--sky);}
+  .container{width:100%;max-width:940px;padding:0 24px;margin-top:40px;}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+  .section-label{font-family:'Cormorant Garamond',serif;font-size:10px;letter-spacing:.32em;color:var(--sky);text-transform:uppercase;margin-bottom:16px;display:flex;align-items:center;gap:12px;}
+  .section-label::after{content:'';flex:1;height:1px;background:var(--border-lt);}
+  .drop-zone{border:1px solid var(--border);border-radius:var(--radius-lg);padding:40px 24px;text-align:center;cursor:pointer;background:rgba(255,255,255,0.025);transition:all .25s;position:relative;overflow:hidden;}
+  .drop-zone::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(126,200,227,0.07) 0%,transparent 70%);pointer-events:none;}
+  .drop-zone:hover,.drop-zone.over{border-color:var(--sky);background:rgba(126,200,227,0.05);}
+  .drop-icon{width:44px;height:44px;margin:0 auto 14px;border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(126,200,227,0.06);}
+  .drop-icon svg{width:20px;height:20px;stroke:var(--sky);fill:none;stroke-width:1.5;}
+  .drop-title{font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--white);margin-bottom:5px;}
+  .drop-sub{font-size:12px;color:var(--mid);}
+  .drop-sub span{color:var(--sky-light);font-weight:500;}
+  #file-list{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
+  .file-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border-lt);border-radius:var(--radius);font-size:13px;color:var(--white);animation:slideIn .2s;}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+  .file-name{flex:1;font-weight:300;}
+  .file-size{font-size:11px;color:var(--mid);}
+  .remove-btn{background:none;border:none;color:var(--mid);cursor:pointer;width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:13px;transition:color .15s,background .15s;flex-shrink:0;}
+  .remove-btn:hover{color:#E06C75;background:rgba(224,108,117,0.12);}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:28px;}
+  .form-group{display:flex;flex-direction:column;gap:6px;}
+  .form-group.full{grid-column:1/-1;}
+  label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--sky);font-weight:500;}
+  .lm{font-size:9px;color:var(--mid);font-family:monospace;margin-left:5px;text-transform:none;letter-spacing:.02em;}
+  .lm-auto{font-size:9px;color:var(--sky-light);font-family:monospace;margin-left:5px;text-transform:none;letter-spacing:.02em;}
+  input[type="text"],textarea{background:rgba(255,255,255,0.04);border:1px solid var(--border-lt);border-radius:var(--radius);color:var(--white);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:300;padding:10px 14px;transition:border-color .2s,background .2s;width:100%;outline:none;}
+  input[type="text"]::placeholder,textarea::placeholder{color:var(--mid);font-style:italic;font-size:13px;}
+  input[type="text"]:hover,textarea:hover{border-color:var(--border);background:rgba(255,255,255,0.055);}
+  input[type="text"]:focus,textarea:focus{border-color:var(--sky);background:rgba(126,200,227,0.05);}
+  textarea{resize:vertical;min-height:70px;line-height:1.5;}
+  .municipio-preview{font-size:11px;color:var(--sky-light);margin-top:4px;font-family:monospace;opacity:.8;}
+  .custom-fields{margin-top:8px;display:flex;flex-direction:column;gap:8px;}
+  .custom-field-row{display:grid;grid-template-columns:1fr 1fr 36px;gap:8px;align-items:center;}
+  .del-btn{width:36px;height:36px;background:none;border:1px solid rgba(224,108,117,0.3);border-radius:var(--radius);color:#E06C75;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .15s;flex-shrink:0;}
+  .del-btn:hover{background:rgba(224,108,117,0.12);}
+  .add-field-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:1px dashed var(--border);border-radius:var(--radius);background:none;color:var(--sky);font-size:11px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .2s;margin-top:4px;font-family:'DM Sans',sans-serif;}
+  .add-field-btn:hover{border-color:var(--sky);background:rgba(126,200,227,0.05);}
+  .divider{width:100%;height:1px;background:var(--border-lt);margin:36px 0;position:relative;}
+  .divider::after{content:'◆';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--navy);padding:0 12px;color:var(--sky);font-size:8px;}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 26px;border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:11px;letter-spacing:.15em;text-transform:uppercase;font-weight:500;cursor:pointer;transition:all .2s;border:none;outline:none;}
+  .btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.8;}
+  .btn-primary{background:var(--sky);color:var(--navy);}
+  .btn-primary:hover{background:var(--sky-light);transform:translateY(-1px);box-shadow:0 6px 20px rgba(126,200,227,0.28);}
+  .btn-primary:active{transform:translateY(0);box-shadow:none;}
+  .btn-secondary{background:transparent;color:var(--sky-light);border:1px solid var(--border);}
+  .btn-secondary:hover{background:rgba(126,200,227,0.07);border-color:var(--sky);}
+  .btn-ghost{background:transparent;color:var(--mid);border:1px solid var(--border-lt);}
+  .btn-ghost:hover{color:var(--sky-light);border-color:var(--border);}
+  #progress-wrap{display:none;margin-top:24px;padding:20px 22px;background:rgba(255,255,255,0.025);border:1px solid var(--border-lt);border-radius:var(--radius-lg);}
+  .prog-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+  #prog-label{font-size:12px;color:var(--white);}
+  #prog-pct{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--sky-light);}
+  .prog-track{height:2px;background:rgba(255,255,255,0.08);border-radius:1px;overflow:hidden;}
+  #prog-fill{height:100%;background:linear-gradient(90deg,var(--sky),var(--sky-light));border-radius:1px;width:0%;transition:width .3s;}
+  #result-panel{display:none;margin-top:24px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
+  .result-header{padding:13px 20px;background:rgba(126,200,227,0.09);border-bottom:1px solid var(--border-lt);font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--sky-light);}
+  .result-item{display:flex;align-items:center;justify-content:space-between;padding:11px 20px;border-bottom:1px solid var(--border-lt);font-size:13px;color:var(--white);font-weight:300;}
+  .result-item:last-child{border-bottom:none;}
+  .badge{font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px;border-radius:20px;font-weight:500;}
+  .badge-ok{background:rgba(98,198,145,0.15);color:#62C691;border:1px solid rgba(98,198,145,0.3);}
+  .badge-err{background:rgba(224,108,117,0.13);color:#E06C75;border:1px solid rgba(224,108,117,0.28);}
+  /* PREVIEW */
+  .preview-selector{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+  .preview-selector select{flex:1;max-width:320px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--border-lt);border-radius:var(--radius);color:var(--white);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;cursor:pointer;}
+  .preview-selector select option{background:var(--navy-2);}
+  .preview-selector select:focus{border-color:var(--sky);}
+  #preview-area{border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--border);}
+  .preview-empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:14px;background:rgba(255,255,255,0.02);border-radius:var(--radius-lg);border:1px solid var(--border-lt);}
+  .preview-empty-state svg{width:36px;height:36px;stroke:var(--mid);fill:none;stroke-width:1;}
+  .preview-empty-state p{font-size:13px;color:var(--mid);text-align:center;}
+  .preview-loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:60px;color:var(--sky);font-size:13px;}
+  .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--sky);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .doc-page{background:#fff;color:#1a1a1a;padding:60px 72px;min-height:400px;font-family:'Times New Roman',serif;font-size:12pt;line-height:1.8;}
+  .doc-page p{margin-bottom:8px;}
+  .doc-page table{width:100%;border-collapse:collapse;margin:12px 0;font-size:11pt;}
+  .doc-page td{border:1px solid #ccc;padding:6px 10px;vertical-align:top;}
+  /* HISTORIAL */
+  .history-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--mid);gap:12px;}
+  .history-empty svg{width:32px;height:32px;stroke:var(--mid);fill:none;stroke-width:1;}
+  .history-list{display:flex;flex-direction:column;gap:8px;}
+  .history-item{background:rgba(255,255,255,0.03);border:1px solid var(--border-lt);border-radius:var(--radius-lg);padding:16px 18px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;transition:border-color .2s;}
+  .history-item:hover{border-color:var(--border);}
+  .history-municipio{font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--sky-light);margin-bottom:6px;}
+  .history-meta{font-size:11px;color:var(--mid);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+  .history-fields{display:flex;flex-wrap:wrap;gap:5px;}
+  .field-pill{font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(126,200,227,0.08);color:var(--sky);border:1px solid var(--border-lt);font-family:monospace;}
+  footer{margin-top:60px;text-align:center;font-size:11px;color:rgba(91,122,153,0.4);letter-spacing:.1em;}
+  @media(max-width:600px){.form-grid{grid-template-columns:1fr}.form-group.full{grid-column:1}.actions{flex-direction:column}.btn{justify-content:center}.custom-field-row{grid-template-columns:1fr 36px}.custom-field-row input:nth-child(2){display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-ornament">República de Colombia · Gestión Pública</div>
+  <h1>Reemplazador de<br><em>Documentos Municipales</em></h1>
+  <p class="header-sub">Sistema de diligenciamiento automático</p>
+  <div class="version-badge">Versión 2.2</div>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" onclick="cambiarTab('principal')">Procesar</div>
+    <div class="tab" onclick="cambiarTab('preview')">Vista previa</div>
+    <div class="tab" onclick="cambiarTab('historial')">Historial</div>
+  </div>
+
+  <!-- TAB PRINCIPAL -->
+  <div id="tab-principal" class="tab-content active">
+    <div class="section-label">I · Documentos</div>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="drop-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+      <div class="drop-title">Arrastra tus documentos aquí</div>
+      <div class="drop-sub">O haz clic para seleccionar · <span>Solo archivos .docx</span></div>
+      <input type="file" id="file-input" multiple accept=".docx" style="display:none" onchange="handleFiles(this.files)">
+    </div>
+    <div id="file-list"></div>
+    <div class="divider"></div>
+    <div class="section-label">II · Datos del Municipio</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Fecha <span class="lm">{{FECHA}}</span></label>
+        <input type="text" id="f-fecha" placeholder="Ej: 13 de marzo de 2026">
+      </div>
+      <div class="form-group">
+        <label>
+          Municipio
+          <span class="lm">{{MUNICIPIO}}</span>
+          <span class="lm-auto">{{MUNICIPIO_MINUS}} ↺ auto</span>
+        </label>
+        <input type="text" id="f-municipio" placeholder="Nombre del municipio" oninput="actualizarPreviewMunicipio()">
+        <div class="municipio-preview" id="municipio-preview"></div>
+      </div>
+      <div class="form-group"><label>Alcalde <span class="lm">{{ALCALDE}}</span></label><input type="text" id="f-alcalde" placeholder="Nombre completo"></div>
+      <div class="form-group"><label>Secretario de Planeación <span class="lm">{{SECRETARIO}}</span></label><input type="text" id="f-secretario" placeholder="Nombre completo"></div>
+      <div class="form-group full"><label>Coordinador de Gestión del Riesgo <span class="lm">{{COORDINADOR}}</span></label><input type="text" id="f-coordinador" placeholder="Nombre completo"></div>
+      <div class="form-group full"><label>Plan de Desarrollo Municipal <span class="lm">{{PLAN_DESARROLLO}}</span></label><input type="text" id="f-plan" placeholder="Nombre oficial del plan"></div>
+      <div class="form-group full"><label>Estrategia del Plan <span class="lm">{{ESTRATEGIA_PLAN}}</span></label><input type="text" id="f-estrategia" placeholder="Ej: Línea 2 · Territorio Sostenible"></div>
+      <div class="form-group full"><label>Objetivo del Plan <span class="lm">{{OBJETIVO_PLAN}}</span></label><textarea id="f-objetivo" placeholder="Describe el objetivo estratégico..."></textarea></div>
+    </div>
+    <div class="divider"></div>
+    <div class="section-label">III · Campos Personalizados</div>
+    <p style="font-size:12px;color:var(--mid);margin-bottom:14px;">Agrega marcadores adicionales. Escribe el nombre exacto sin llaves.</p>
+    <div class="custom-fields" id="custom-fields"></div>
+    <button class="add-field-btn" onclick="agregarCampo()">
+      <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Agregar campo
+    </button>
+    <div class="divider"></div>
+    <div class="section-label">IV · Generar</div>
+    <div class="actions">
+      <button class="btn btn-primary" onclick="procesarDocumentos()">
+        <svg viewBox="0 0 24 24"><path d="M12 2v14M5 9l7 7 7-7"/><path d="M3 20h18"/></svg>
+        Procesar y descargar ZIP
+      </button>
+      <button class="btn btn-secondary" onclick="irAPreview()">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        Vista previa
+      </button>
+      <button class="btn btn-ghost" onclick="descargarExcel()">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Exportar Excel
+      </button>
+    </div>
+    <div id="progress-wrap">
+      <div class="prog-header"><span id="prog-label">Procesando...</span><span id="prog-pct">0%</span></div>
+      <div class="prog-track"><div id="prog-fill"></div></div>
+    </div>
+    <div id="result-panel">
+      <div class="result-header">Resultado del proceso</div>
+      <div id="result-list"></div>
+    </div>
+  </div>
+
+  <!-- TAB PREVIEW -->
+  <div id="tab-preview" class="tab-content">
+    <div class="preview-selector">
+      <select id="preview-select">
+        <option value="">— Selecciona un archivo —</option>
+      </select>
+      <button class="btn btn-secondary" onclick="generarPreview()" style="padding:10px 18px;">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        Generar
+      </button>
+    </div>
+    <div id="preview-area">
+      <div class="preview-empty-state">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <p>Carga documentos, llena los datos y presiona <strong>Generar</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB HISTORIAL -->
+  <div id="tab-historial" class="tab-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="font-size:12px;color:var(--mid);">Últimos 20 municipios procesados</div>
+      <button class="btn btn-ghost" onclick="limpiarHistorial()" style="padding:6px 12px;font-size:10px;">Limpiar todo</button>
+    </div>
+    <div id="historial-contenido"></div>
+  </div>
+</div>
+
+<footer>SISTEMA DE GESTIÓN DOCUMENTAL MUNICIPAL · USO INSTITUCIONAL</footer>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// MOTOR v2.2 — fusión robusta de cualquier marcador partido
+// ════════════════════════════════════════════════════════════
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function lRPr(r){return r.replace(/<w:highlight[^\/]*\/>/g,'').replace(/<w:highlight[^>]*>[\s\S]*?<\/w:highlight>/g,'').trim();}
+function tf(r){return r.includes('<w:rFonts')||r.includes('<w:b/>')||r.includes('<w:sz');}
+function xRuns(b){const runs=[];const re=/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g;let m;while((m=re.exec(b))!==null)runs.push(m[0]);return runs;}
+function xRPr(b){
+  for(const r of xRuns(b)){const m=r.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);if(m&&tf(m[1]))return lRPr(m[1]);}
+  const re2=/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g;let pm;
+  while((pm=re2.exec(b))!==null){const pp=pm[0].match(/<w:pPr>[\s\S]*?<w:rPr>([\s\S]*?)<\/w:rPr>/);if(pp){const r=lRPr(pp[1]);if(r&&tf(r))return r;}}
+  return '';
+}
+
+// Fusión robusta: detecta cualquier run con '{' sin cerrar y fusiona con siguientes
+function fusionarRunsEnParrafo(parrafo){
+  const runs=list=>list?list:[];
+  let rs=xRuns(parrafo);
+  if(rs.length<2)return parrafo;
+  let txts=rs.map(r=>{const t=r.match(/<w:t[^>]*>([^<]*)<\/w:t>/);return t?t[1]:'';});
+  let mod=parrafo;
+  let i=0;
+  while(i<txts.length){
+    const ti=txts[i];
+    const abiertas=ti.split('{').length-1-(ti.split('}').length-1);
+    if(ti.includes('{')&&abiertas>0){
+      let combinado=ti;
+      let j=i+1;
+      while(j<txts.length){
+        combinado+=txts[j];j++;
+        if(combinado.split('{{').length-1===combinado.split('}}').length-1&&combinado.includes('{{'))break;
+      }
+      if(j>i+1&&combinado.includes('{{')&&combinado.split('{{').length-1===combinado.split('}}').length-1){
+        let rprMejor='';
+        for(let k=i;k<j;k++){const rm=rs[k].match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);if(rm&&tf(rm[1])){rprMejor=lRPr(rm[1]);break;}}
+        const primerInicio=mod.indexOf(rs[i]);
+        if(primerInicio>=0){
+          let pos=primerInicio;
+          let bloqueOriginal='';
+          for(let k=i;k<j;k++){
+            const ri=rs[k];
+            const idx=mod.indexOf(ri,pos);
+            if(idx>=0){bloqueOriginal=mod.slice(primerInicio,idx+ri.length);pos=idx+ri.length;}
+          }
+          const rprTag=rprMejor?`<w:rPr>${rprMejor}</w:rPr>`:'';
+          const nuevoRun=`<w:r>${rprTag}<w:t xml:space="preserve">${combinado}</w:t></w:r>`;
+          mod=mod.slice(0,primerInicio)+nuevoRun+mod.slice(primerInicio+bloqueOriginal.length);
+          rs=xRuns(mod);
+          txts=rs.map(r=>{const t=r.match(/<w:t[^>]*>([^<]*)<\/w:t>/);return t?t[1]:'';});
+          i=0;continue;
+        }
+      }
+    }
+    i++;
+  }
+  return mod;
+}
+
+function buscarRPr(pXml,ri,runs,parrafos,pi){
+  for(let j=ri-1;j>=0;j--){const m=runs[j].match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);if(m&&tf(m[1]))return lRPr(m[1]);}
+  for(let j=ri+1;j<runs.length;j++){const m=runs[j].match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);if(m&&tf(m[1]))return lRPr(m[1]);}
+  const pp=pXml.match(/<w:pPr>[\s\S]*?<w:rPr>([\s\S]*?)<\/w:rPr>/);if(pp){const r=lRPr(pp[1]);if(r)return r;}
+  for(const d of[1,-1,2,-2]){const a=pi+d;if(a>=0&&a<parrafos.length){const bl=parrafos[a].group?parrafos[a].group(0):parrafos[a];const r=xRPr(bl);if(r)return r;}}
+  return '';
+}
+
+function reemplazarEnCelda(celda,key,valor,rprCol){
+  const marcador='{{'+key+'}}';if(!celda.includes(marcador))return celda;
+  // Fusionar en cada párrafo de la celda
+  celda=celda.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g,p=>fusionarRunsEnParrafo(p));
+  const valEsc=esc(valor);let seg=0;
+  while(celda.includes(marcador)&&seg++<20){
+    const runs=xRuns(celda);let hecho=false;
+    for(let i=0;i<runs.length;i++){
+      const tm=runs[i].match(/<w:t[^>]*>([^<]*)<\/w:t>/);if(!tm||!tm[1].includes(marcador))continue;
+      let rpr='';
+      for(let j=i-1;j>=0;j--){const m=runs[j].match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);if(m&&tf(m[1])){rpr=lRPr(m[1]);break;}}
+      if(!rpr)for(let j=i+1;j<runs.length;j++){const m=runs[j].match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);if(m&&tf(m[1])){rpr=lRPr(m[1]);break;}}
+      if(!rpr){const re3=/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g;let pm;while((pm=re3.exec(celda))!==null){if(!pm[0].includes(marcador))continue;const pp2=pm[0].match(/<w:pPr>[\s\S]*?<w:rPr>([\s\S]*?)<\/w:rPr>/);if(pp2){const r=lRPr(pp2[1]);if(r)rpr=r;}break;}}
+      if(!rpr&&rprCol)rpr=rprCol;
+      celda=celda.replace(runs[i],`<w:r>${rpr?`<w:rPr>${rpr}</w:rPr>`:''}<w:t xml:space="preserve">${valEsc}</w:t></w:r>`);hecho=true;break;
+    }
+    if(!hecho)break;
+  }
+  return celda;
+}
+
+function procesarXML(xml,datos){
+  // PASO 1: Fusionar todos los párrafos
+  xml=xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g,p=>fusionarRunsEnParrafo(p));
+
+  // PASO 2: Tablas
+  xml=xml.replace(/<w:tbl\b[^>]*>[\s\S]*?<\/w:tbl>/g,tabla=>{
+    const filas=[...tabla.matchAll(/<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/g)];
+    const colRpr={};
+    for(const fm of filas)[...fm[0].matchAll(/<w:tc\b[^>]*>[\s\S]*?<\/w:tc>/g)].forEach((cm,col)=>{if(!(col in colRpr)){const r=xRPr(cm[0]);if(r)colRpr[col]=r;}});
+    let nT=tabla;
+    for(const fm of filas){const fo=fm[0];if(!fo.includes('{{'))continue;let fn=fo;
+      const cs=[...fn.matchAll(/<w:tc\b[^>]*>[\s\S]*?<\/w:tc>/g)];
+      for(let col=0;col<cs.length;col++){let co=cs[col][0];if(!co.includes('{{'))continue;let cn=co;
+        for(const[k,v]of Object.entries(datos))if(v)cn=reemplazarEnCelda(cn,k,v,colRpr[col]||'');
+        if(cn!==co)fn=fn.replace(co,cn);}
+      if(fn!==fo)nT=nT.replace(fo,fn);}
+    return nT;
+  });
+
+  // PASO 3: Párrafos fuera de tabla
+  const tieneAlgun=()=>Object.keys(datos).some(k=>xml.includes('{{'+k+'}}'));
+  let iter=0;
+  while(tieneAlgun()&&iter++<20){
+    const parrafos=[...xml.matchAll(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g)];
+    let cambio=false;
+    for(let pi=0;pi<parrafos.length;pi++){
+      const po=parrafos[pi][0];if(!po.includes('{{'))continue;let pn=po;
+      for(const[key,valor]of Object.entries(datos)){
+        const marcador='{{'+key+'}}';if(!pn.includes(marcador)||!valor)continue;
+        const valEsc=esc(valor);let seg=0;
+        while(pn.includes(marcador)&&seg++<20){
+          const runs=xRuns(pn);let hecho=false;
+          for(let i=0;i<runs.length;i++){
+            const tm=runs[i].match(/<w:t[^>]*>([^<]*)<\/w:t>/);if(!tm||!tm[1].includes(marcador))continue;
+            const rpr=buscarRPr(pn,i,runs,parrafos,pi);
+            pn=pn.replace(runs[i],`<w:r>${rpr?`<w:rPr>${rpr}</w:rPr>`:''}<w:t xml:space="preserve">${valEsc}</w:t></w:r>`);hecho=true;break;
+          }
+          if(!hecho)break;
+        }
+      }
+      if(pn!==po){xml=xml.replace(po,pn);parrafos[pi]={0:pn};cambio=true;}
+    }
+    if(!cambio)break;
+  }
+  return xml;
+}
+
+// ════════════════════════════════════════════════════════════
+// VISTA PREVIA — extractor XML nativo
+// ════════════════════════════════════════════════════════════
+function xmlAHtml(xml){
+  const lineas=[];
+  const parRegex=/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g;let pm;
+  while((pm=parRegex.exec(xml))!==null){
+    const parXml=pm[1];
+    const jc=parXml.match(/<w:jc w:val="([^"]+)"/);
+    const align=jc?({center:'center',right:'right',both:'justify'}[jc[1]]||''):'';
+    const pStyle=parXml.match(/<w:pStyle w:val="([^"]+)"/);
+    const esH=pStyle&&/heading|Heading/i.test(pStyle[1]);
+    const runRegex=/<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g;let rm;let contenido='';
+    while((rm=runRegex.exec(parXml))!==null){
+      const rXml=rm[1];const txtM=rXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
+      if(!txtM||!txtM[1])continue;
+      let txt=txtM[1].replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+      txt=txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const rPr=rXml.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/);const rPrS=rPr?rPr[1]:'';
+      const bold=/<w:b\/>|<w:b\s/.test(rPrS);const italic=/<w:i\/>|<w:i\s/.test(rPrS);
+      const sz=rPrS.match(/<w:sz w:val="(\d+)"/);const szPt=sz?parseInt(sz[1])/2:null;
+      const caps=/<w:caps\/>/.test(rPrS);if(caps)txt=txt.toUpperCase();
+      let span=txt;
+      if(szPt)span=`<span style="font-size:${szPt}pt">${span}</span>`;
+      if(bold)span=`<strong>${span}</strong>`;
+      if(italic)span=`<em>${span}</em>`;
+      contenido+=span;
+    }
+    if(!contenido.trim()){lineas.push('<p style="margin:4px 0">&nbsp;</p>');continue;}
+    const st=`margin:8px 0;${align?'text-align:'+align+';':''}`;
+    lineas.push(esH?`<h2 style="${st}font-weight:bold;">${contenido}</h2>`:`<p style="${st}">${contenido}</p>`);
+  }
+  return lineas.join('\n');
+}
+
+async function docxAHtmlPreview(file,datos){
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());
+  const entry=zip.file('word/document.xml');if(!entry)throw new Error('No se encontró document.xml');
+  let xml=await entry.async('string');
+  xml=procesarXML(xml,datos);
+  const tablas={};let tIdx=0;
+  xml=xml.replace(/<w:tbl\b[^>]*>[\s\S]*?<\/w:tbl>/g,tbl=>{
+    const key=`__T${tIdx}__`;tablas[key]=tbl;tIdx++;
+    return `<w:p><w:r><w:t>${key}</w:t></w:r></w:p>`;
+  });
+  let html=xmlAHtml(xml);
+  for(const[key,tbl]of Object.entries(tablas)){
+    let th='<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:11pt;">';
+    for(const fm of tbl.matchAll(/<w:tr\b[^>]*>([\s\S]*?)<\/w:tr>/g)){
+      th+='<tr>';
+      for(const cm of fm[1].matchAll(/<w:tc\b[^>]*>([\s\S]*?)<\/w:tc>/g)){
+        const runs=[...cm[1].matchAll(/<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g)];
+        let ct='';
+        for(const r of runs){const t=r[1].match(/<w:t[^>]*>([^<]*)<\/w:t>/);if(t){const b=/<w:b\/>/.test(r[1]);let txt=t[1].replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');ct+=b?`<strong>${txt}</strong>`:txt;}}
+        th+=`<td style="border:1px solid #ccc;padding:6px 10px;vertical-align:top;">${ct||'&nbsp;'}</td>`;
+      }
+      th+='</tr>';
+    }
+    th+='</table>';
+    html=html.replace(key,th);
+  }
+  return html;
+}
+
+// ════════════════════════════════════════════════════════════
+// ESTADO
+// ════════════════════════════════════════════════════════════
+let archivos=[];
+let historial=JSON.parse(localStorage.getItem('docHistorial')||'[]');
+let camposPersonalizados=[];
+
+function actualizarPreviewMunicipio(){
+  const val=document.getElementById('f-municipio').value.trim();
+  const prev=document.getElementById('municipio-preview');
+  if(val){
+    const minus=val.charAt(0).toUpperCase()+val.slice(1).toLowerCase();
+    prev.textContent='{{MUNICIPIO_MINUS}} → '+minus;
+  }else{prev.textContent='';}
+}
+
+function cambiarTab(tab){
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['principal','preview','historial'][i]===tab));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab==='historial')renderHistorial();
+  if(tab==='preview')actualizarSelectPreview();
+}
+
+const dz=document.getElementById('drop-zone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');handleFiles(e.dataTransfer.files);});
+
+function handleFiles(files){
+  for(const f of files)if(f.name.toLowerCase().endsWith('.docx')&&!archivos.find(a=>a.name===f.name))archivos.push(f);
+  renderList();
+}
+function renderList(){
+  document.getElementById('file-list').innerHTML=archivos.map((f,i)=>`
+    <div class="file-item">
+      <svg style="width:13px;height:13px;flex-shrink:0;stroke:#7EC8E3;fill:none;stroke-width:1.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span class="file-name">${f.name}</span>
+      <span class="file-size">${(f.size/1024).toFixed(0)} KB</span>
+      <button class="remove-btn" onclick="quitarArchivo(${i})">✕</button>
+    </div>`).join('');
+}
+function quitarArchivo(i){archivos.splice(i,1);renderList();}
+function agregarCampo(){camposPersonalizados.push({key:'',valor:''});renderCampos();}
+function eliminarCampo(i){camposPersonalizados.splice(i,1);renderCampos();}
+function renderCampos(){
+  document.getElementById('custom-fields').innerHTML=camposPersonalizados.map((c,i)=>`
+    <div class="custom-field-row">
+      <input type="text" placeholder="NOMBRE_MARCADOR" value="${c.key}" oninput="camposPersonalizados[${i}].key=this.value.toUpperCase()" style="font-family:monospace;font-size:12px;">
+      <input type="text" placeholder="Valor a reemplazar" value="${c.valor}" oninput="camposPersonalizados[${i}].valor=this.value">
+      <button class="del-btn" onclick="eliminarCampo(${i})">✕</button>
+    </div>`).join('');
+}
+
+function getDatos(){
+  const mun=document.getElementById('f-municipio').value.trim();
+  const d={
+    'FECHA':document.getElementById('f-fecha').value.trim(),
+    'MUNICIPIO':mun,
+    'MUNICIPIO_MINUS':mun?mun.charAt(0).toUpperCase()+mun.slice(1).toLowerCase():'',
+    'ALCALDE':document.getElementById('f-alcalde').value.trim(),
+    'SECRETARIO':document.getElementById('f-secretario').value.trim(),
+    'COORDINADOR':document.getElementById('f-coordinador').value.trim(),
+    'PLAN_DESARROLLO':document.getElementById('f-plan').value.trim(),
+    'ESTRATEGIA_PLAN':document.getElementById('f-estrategia').value.trim(),
+    'OBJETIVO_PLAN':document.getElementById('f-objetivo').value.trim(),
+  };
+  for(const c of camposPersonalizados)if(c.key.trim()&&c.valor.trim())d[c.key.trim()]=c.valor.trim();
+  return d;
+}
+
+async function procesarDocumento(file,datos){
+  const zip=await JSZip.loadAsync(await file.arrayBuffer());
+  const targets=['word/document.xml','word/header1.xml','word/header2.xml','word/header3.xml','word/footer1.xml','word/footer2.xml','word/footer3.xml'];
+  for(const p of targets){const e=zip.file(p);if(e)zip.file(p,procesarXML(await e.async('string'),datos));}
+  return zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+}
+
+function descargarBlob(blob,nombre){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=nombre;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}
+
+async function procesarDocumentos(){
+  if(!archivos.length){alert('Carga al menos un archivo .docx');return;}
+  const datos=getDatos();const municipio=datos.MUNICIPIO||'municipio';
+  const pw=document.getElementById('progress-wrap'),fill=document.getElementById('prog-fill'),
+        pct=document.getElementById('prog-pct'),lbl=document.getElementById('prog-label'),
+        rp=document.getElementById('result-panel'),rl=document.getElementById('result-list');
+  pw.style.display='block';rp.style.display='none';rl.innerHTML='';
+  const resultados=[];const zipFinal=new JSZip();
+  for(let i=0;i<archivos.length;i++){
+    const f=archivos[i];
+    fill.style.width=Math.round((i/archivos.length)*100)+'%';
+    pct.textContent=Math.round((i/archivos.length)*100)+'%';
+    lbl.textContent='Procesando: '+f.name;
+    try{const blob=await procesarDocumento(f,datos);zipFinal.file(municipio+'_'+f.name.replace('.docx','_procesado.docx'),await blob.arrayBuffer());resultados.push({n:f.name,ok:true});}
+    catch(e){console.error(e);resultados.push({n:f.name,ok:false});}
+  }
+  fill.style.width='100%';pct.textContent='100%';
+  lbl.textContent=resultados.filter(r=>r.ok).length+' documento(s) procesado(s)';
+  const zb=await zipFinal.generateAsync({type:'blob'});
+  descargarBlob(zb,municipio+'_documentos_'+new Date().toISOString().slice(0,10)+'.zip');
+  rp.style.display='block';
+  rl.innerHTML=resultados.map(r=>`<div class="result-item"><span>${r.n}</span><span class="badge ${r.ok?'badge-ok':'badge-err'}">${r.ok?'En ZIP':'Error'}</span></div>`).join('');
+  guardarHistorial(datos,archivos.length,resultados.filter(r=>r.ok).length);
+}
+
+function actualizarSelectPreview(){
+  const sel=document.getElementById('preview-select');
+  sel.innerHTML='<option value="">— Selecciona un archivo —</option>'+archivos.map((f,i)=>`<option value="${i}">${f.name}</option>`).join('');
+}
+function irAPreview(){cambiarTab('preview');actualizarSelectPreview();if(archivos.length===1){document.getElementById('preview-select').value='0';generarPreview();}}
+
+async function generarPreview(){
+  const sel=document.getElementById('preview-select');
+  const idx=parseInt(sel.value);
+  const area=document.getElementById('preview-area');
+  if(isNaN(idx)||idx<0||idx>=archivos.length){
+    area.innerHTML='<div class="preview-empty-state"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>Selecciona un archivo para previsualizar</p></div>';return;
+  }
+  area.innerHTML='<div class="preview-loading"><div class="spinner"></div><span>Generando vista previa...</span></div>';
+  try{
+    const html=await docxAHtmlPreview(archivos[idx],getDatos());
+    area.innerHTML=`<div class="doc-page">${html}</div>`;
+  }catch(e){
+    area.innerHTML='<div class="preview-empty-state"><p style="color:#E06C75;">Error: '+e.message+'</p></div>';
+  }
+}
+
+function guardarHistorial(datos,total,ok){
+  historial.unshift({id:Date.now(),fecha:new Date().toLocaleString('es-CO'),municipio:datos.MUNICIPIO||'Sin nombre',datos:{...datos},totalDocs:total,docsOk:ok});
+  if(historial.length>20)historial=historial.slice(0,20);
+  localStorage.setItem('docHistorial',JSON.stringify(historial));
+}
+function renderHistorial(){
+  const cont=document.getElementById('historial-contenido');
+  if(!historial.length){cont.innerHTML='<div class="history-empty"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg><span>Aún no hay municipios procesados</span></div>';return;}
+  cont.innerHTML='<div class="history-list">'+historial.map(h=>`
+    <div class="history-item">
+      <div style="flex:1;">
+        <div class="history-municipio">${h.municipio}</div>
+        <div class="history-meta"><span>${h.docsOk}/${h.totalDocs} docs</span><span>${h.fecha}</span></div>
+        <div class="history-fields">
+          ${h.datos.ALCALDE?`<span class="field-pill">Alcalde: ${h.datos.ALCALDE}</span>`:''}
+          ${h.datos.SECRETARIO?`<span class="field-pill">${h.datos.SECRETARIO}</span>`:''}
+          ${h.datos.PLAN_DESARROLLO?`<span class="field-pill">${h.datos.PLAN_DESARROLLO}</span>`:''}
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="cargarDesdeHistorial(${h.id})" style="padding:6px 14px;font-size:10px;flex-shrink:0;">Cargar</button>
+    </div>`).join('')+'</div>';
+}
+function cargarDesdeHistorial(id){
+  const h=historial.find(x=>x.id===id);if(!h)return;
+  const d=h.datos;
+  document.getElementById('f-fecha').value=d.FECHA||'';
+  document.getElementById('f-municipio').value=d.MUNICIPIO||'';
+  document.getElementById('f-alcalde').value=d.ALCALDE||'';
+  document.getElementById('f-secretario').value=d.SECRETARIO||'';
+  document.getElementById('f-coordinador').value=d.COORDINADOR||'';
+  document.getElementById('f-plan').value=d.PLAN_DESARROLLO||'';
+  document.getElementById('f-estrategia').value=d.ESTRATEGIA_PLAN||'';
+  document.getElementById('f-objetivo').value=d.OBJETIVO_PLAN||'';
+  actualizarPreviewMunicipio();
+  camposPersonalizados=[];
+  const fijos=['FECHA','MUNICIPIO','MUNICIPIO_MINUS','ALCALDE','SECRETARIO','COORDINADOR','PLAN_DESARROLLO','ESTRATEGIA_PLAN','OBJETIVO_PLAN'];
+  for(const[k,v]of Object.entries(d))if(!fijos.includes(k)&&k&&v)camposPersonalizados.push({key:k,valor:v});
+  renderCampos();cambiarTab('principal');
+}
+function limpiarHistorial(){if(!confirm('¿Eliminar todo el historial?'))return;historial=[];localStorage.removeItem('docHistorial');renderHistorial();}
+
+function descargarExcel(){
+  const d=getDatos();
+  const filas=[['Campo','Marcador','Valor'],
+    ['Fecha','{{FECHA}}',d.FECHA],
+    ['Municipio (mayúscula)','{{MUNICIPIO}}',d.MUNICIPIO],
+    ['Municipio (minúscula)','{{MUNICIPIO_MINUS}}',d.MUNICIPIO_MINUS],
+    ['Alcalde','{{ALCALDE}}',d.ALCALDE],
+    ['Secretario de Planeación','{{SECRETARIO}}',d.SECRETARIO],
+    ['Coordinador','{{COORDINADOR}}',d.COORDINADOR],
+    ['Plan de Desarrollo','{{PLAN_DESARROLLO}}',d.PLAN_DESARROLLO],
+    ['Estrategia del Plan','{{ESTRATEGIA_PLAN}}',d.ESTRATEGIA_PLAN],
+    ['Objetivo del Plan','{{OBJETIVO_PLAN}}',d.OBJETIVO_PLAN],
+    ...camposPersonalizados.filter(c=>c.key&&c.valor).map(c=>[c.key,'{{'+c.key+'}}',c.valor]),
+  ];
+  const csv=filas.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  descargarBlob(blob,'registro_'+(d.MUNICIPIO||'municipio')+'_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+renderHistorial();
+</script>
+</body>
+</html>
